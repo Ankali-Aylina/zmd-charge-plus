@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Media;
 using EndfieldChargePlus.Customization;
 using EndfieldChargePlus.Interop;
@@ -18,20 +19,50 @@ internal class BugRegressionTests
     }
 
     [STAThread]
-    public static int Main()
+    public static int Main(string[] args)
     {
         try
         {
             AppBuilder.Configure<FontTestApp>().UsePlatformDetect().WithInterFont().SetupWithoutStarting();
+            if(args.Length>0 && args[0]=="--interaction") { InteractionRegressionChecks.Standalone(Check); Console.WriteLine($"PASS {_checks} interaction checks"); return 0; }
+            if(args.Length>0 && args[0].StartsWith("--frame")) return LiveFrameChecks.Run(args);
+            if(args.Length>0 && args[0]=="--fps-live") return LiveFrameChecks.Run(args);
             var face = new Typeface(new FontFamily("avares://Avalonia.Fonts.Inter/Assets#Inter"));
             Check(face.GlyphTypeface.GetGlyph('A') != 0, "ECP-4: bundled Inter must resolve without an installed font.");
             NativeWindowChecks();
+            FeatureRegressionChecks.Run(Check);
+            SettingsFeatureChecks();
+            RuntimeRegressionChecks.Run(Check);
             SynchronizationContext.SetSynchronizationContext(null);
             RunAsync().GetAwaiter().GetResult();
             Console.WriteLine($"PASS: {_checks} checks (embedded font, native HUD styles/layers, HTTP, colors, fans, sampling).");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+    }
+
+    private static void SettingsFeatureChecks()
+    {
+        EndfieldChargePlus.LocalizationManager.Initialize("zh-CN");
+        var hud=new HudWindow();
+        var settings=new EndfieldChargePlus.Settings.AppSettings();
+        using var runtime=new CustomHudRuntime(hud);
+        runtime.ApplySettings(settings);
+        var window=new EndfieldChargePlus.Settings.SettingsWindow(settings,hud,runtime);
+        Check(window.Title=="Endfield Charge Plus v0.1.1 设置","Settings title contains the frozen version without parentheses.");
+        var panel=window.FindControl<Avalonia.Controls.StackPanel>("ExperimentalPanel")!;
+        Check(panel.Children.Count>3,"Experimental tab contains a multi-instance editor.");
+        Check(!window.FindControl<HudCustomizerView>("Customizer")!.FindControl<Avalonia.Controls.CheckBox>("PersistentClickSwitch")!.IsEnabled,"Click cycling is configurable only in persistent mode.");
+        var view=window.FindControl<HudCustomizerView>("Customizer")!;
+        var combo=view.FindControl<Avalonia.Controls.ComboBox>("ProfileCombo")!;
+        combo.SelectedIndex=settings.CustomHud.Profiles.FindIndex(p=>p.BuiltInKey=="system.window-fps");
+        Check(view.FindControl<Avalonia.Controls.Border>("FrameOptionsPanel")!.IsVisible && view.FindControl<Avalonia.Controls.StackPanel>("FrameWindowOptions")!.IsVisible,"Selecting Window FPS exposes the real target and full-scale settings.");
+        combo.SelectedIndex=settings.CustomHud.Profiles.FindIndex(p=>p.BuiltInKey=="system.display-fps");
+        Check(view.FindControl<Avalonia.Controls.StackPanel>("FrameDisplayOptions")!.IsVisible && !view.FindControl<Avalonia.Controls.StackPanel>("FrameWindowOptions")!.IsVisible,"Selecting Display FPS exposes the corresponding display settings.");
+        EndfieldChargePlus.LocalizationManager.SetLanguage(EndfieldChargePlus.AppLanguage.English);
+        typeof(EndfieldChargePlus.Settings.SettingsWindow).GetMethod("ApplyLocalization",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance)!.Invoke(window,null);
+        Check(window.Title=="Endfield Charge Plus v0.1.1 Settings","English title has no parentheses.");
+        window.Close(); hud.Close();
     }
 
     private static void NativeWindowChecks()
@@ -52,6 +83,11 @@ internal class BugRegressionTests
             Check((GetWindowLong(window, -20) & 8) != 0, "ECP-72: native topmost style applied.");
             layer.Apply(false, false);
             Check((GetWindowLong(window, -20) & 8) == 0, "Desktop layer switch removes topmost.");
+            using var interaction=new WindowsHudInteraction(window,_=>true,()=>{});
+            interaction.SetEnabled(true);
+            Check((GetWindowLong(window,-20)&0x20)!=0,"The animated host stays fully mouse-through while click switching is enabled.");
+            interaction.SetEnabled(false);
+            Check((GetWindowLong(window,-20)&0x20)!=0,"Disabling click cycling restores click-through behavior.");
         }
         finally { DestroyWindow(window); }
     }

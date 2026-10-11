@@ -59,3 +59,6 @@ LibreHardwareMonitor itself includes additional third-party components under the
 ### Runtime / transitive dependencies
 
 Self-contained builds also carry the .NET runtime and transitive dependencies brought in by the packages above. Their original license metadata and upstream notices remain applicable. When preparing a public binary release, keep this notice together with the source release information and retain all license files required by the corresponding upstream components.
+
+
+Windows FPS collector: Intel PresentMon 2.6.0 (MIT), https://github.com/GameTechDev/PresentMon/tree/v2.6.0 . ECP uses its ETW decoder with an output-only window attribution extension and a small support adapter; see native/ECPFrames/README.md and Assets/PresentMon/LICENSE.txt.

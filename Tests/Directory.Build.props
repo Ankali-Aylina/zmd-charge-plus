@@ -1,0 +1,5 @@
+<Project>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'BugRegressionTests'">
+    <BaseIntermediateOutputPath>obj-bugs\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

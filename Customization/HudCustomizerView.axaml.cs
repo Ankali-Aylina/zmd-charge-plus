@@ -114,14 +114,22 @@ public partial class HudCustomizerView : UserControl
     private List<string> _cycleSourceProfileIds = new();
     private IReadOnlyList<GpuAdapterInfo> _gpuAdapters = Array.Empty<GpuAdapterInfo>();
     private HudWindow? _hud;
+    public Func<HudRenderData,Func<System.Threading.CancellationToken,Task<HudRenderData>>,Task>? PreviewPresenter { get; set; }
+    public void SetPreviewHud(HudWindow? hud)
+    {
+        _hud=hud;PreviewBtn.IsEnabled=hud is { IsClosed:false };
+        ToolTip.SetTip(PreviewBtn,hud is null ? LocalizationManager.Text("请先保存并应用新增实例。","Save & Apply the new instance first.") : null);
+    }
     private CustomHudSettings _loaded = CustomHudSettings.CreateDefault();
     private int _selectedIndex = -1;
     private bool _loading;
     private readonly VariableHub _previewVariables = new();
+    public void SetSamplingInterval(double seconds) => _previewVariables.SamplingIntervalSeconds=seconds;
 
     public HudCustomizerView()
     {
         InitializeComponent();
+        RefreshFrameTargetsBtn.Click += (_,_) => RefreshFrameTargets();
 
         LocalizationManager.ApplyStaticText(this);
         RebuildLocalizedChoiceItems();
@@ -298,10 +306,10 @@ public partial class HudCustomizerView : UserControl
             box.Text = desired;
     }
 
-    public void Load(CustomHudSettings? settings, HudWindow hud)
+    public void Load(CustomHudSettings? settings, HudWindow? hud)
     {
         _loading = true;
-        _hud = hud;
+        SetPreviewHud(hud);
         _loaded = HudSettingsNormalizer.Normalize(settings ?? CustomHudSettings.CreateDefault());
         AutoCycleSwitch.IsChecked = _loaded.AutoCycle;
         CycleSecondsBox.Value = _loaded.CycleSeconds;
@@ -447,6 +455,7 @@ public partial class HudCustomizerView : UserControl
             "max" => 3,
             _ => 0,
         };
+        LoadFrameOptions(p);
         NetworkReferenceValueBox.Value = (decimal)Math.Max(0.001d, p.NetworkReferenceValue);
         NetworkReferenceUnitCombo.SelectedIndex = p.NetworkReferenceUnit switch
         {
@@ -480,6 +489,12 @@ public partial class HudCustomizerView : UserControl
 
         if (old.IsBuiltIn || !string.IsNullOrWhiteSpace(old.BuiltInKey))
         {
+            if (old.BuiltInKey is "system.display-fps" or "system.window-fps" &&
+                ProfilesFunctionallyEqual(editorBase,edited with { FrameDisplayId=editorBase.FrameDisplayId,FrameWindowId=editorBase.FrameWindowId,FrameFullScaleFps=editorBase.FrameFullScaleFps }))
+            {
+                _profiles[_selectedIndex]=old with { FrameDisplayId=edited.FrameDisplayId,FrameWindowId=edited.FrameWindowId,FrameFullScaleFps=edited.FrameFullScaleFps };
+                return !ProfilesFunctionallyEqual(editorBase,edited);
+            }
             string enteredName = ProfileNameBox.Text?.Trim() ?? "";
             bool renamed = enteredName.Length > 0
                            && !string.Equals(enteredName, ProfileDisplayName(old), StringComparison.Ordinal);
@@ -587,6 +602,9 @@ public partial class HudCustomizerView : UserControl
             TimeTargetEnabled = isTime ? TimeTargetSwitch.IsChecked == true : old.TimeTargetEnabled,
             TimeTarget = isTime ? NormalizeTimeTarget(TimeTargetBox.Text, old.TimeTarget) : old.TimeTarget,
             GpuAdapterId = gpuAdapterId,
+            FrameDisplayId = HudProfileRenderer.GetRequiredVariables(old).Any(k=>k.StartsWith("frame.display.")) ? (FrameDisplayTargetCombo.SelectedItem as FrameTarget)?.Id ?? old.FrameDisplayId : old.FrameDisplayId,
+            FrameWindowId = HudProfileRenderer.GetRequiredVariables(old).Any(k=>k.StartsWith("frame.window.")) ? (FrameWindowTargetCombo.SelectedItem as FrameTarget)?.Id ?? old.FrameWindowId : old.FrameWindowId,
+            FrameFullScaleFps = (double)(FrameFullScaleBox.Value ?? (decimal)old.FrameFullScaleFps),
             NetworkDisplayUnit = networkDisplayUnit,
             NetworkPercentMode = networkPercentMode,
             NetworkReferenceValue = networkReferenceValue,
@@ -612,6 +630,7 @@ public partial class HudCustomizerView : UserControl
             || !string.Equals(a.LeftIcon, b.LeftIcon, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(a.RightIcon, b.RightIcon, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(a.AccentColor, b.AccentColor, StringComparison.OrdinalIgnoreCase)
+            || a.FrameDisplayId != b.FrameDisplayId || a.FrameWindowId != b.FrameWindowId || a.FrameFullScaleFps != b.FrameFullScaleFps
             || a.TimeTargetEnabled != b.TimeTargetEnabled
             || !string.Equals(a.TimeTarget, b.TimeTarget, StringComparison.Ordinal)
             || !string.Equals(a.GpuAdapterId, b.GpuAdapterId, StringComparison.OrdinalIgnoreCase)
@@ -754,6 +773,7 @@ public partial class HudCustomizerView : UserControl
         bool isPing = profile is not null && ProfileNeedsPing(profile);
         bool isDeepSeek = profile is not null && ProfileNeedsDeepSeek(profile);
 
+        FrameOptionsPanel.IsVisible=profile is not null && HudProfileRenderer.GetRequiredVariables(profile).Any(k=>k.StartsWith("frame."));
         DeepSeekOptionsHintPanel.IsVisible = isDeepSeek;
 
         TimeOptionsPanel.IsVisible = isTime;
@@ -963,6 +983,7 @@ public partial class HudCustomizerView : UserControl
         if (_hud is null) return;
         if (_selectedIndex < 0 || _selectedIndex >= _profiles.Count) return;
 
+        var presenter=PreviewPresenter;
         PreviewBtn.IsEnabled = false;
         ProfileStatusText.Text = LocalizationManager.Text("正在读取数据…", "Reading data…");
         try
@@ -981,18 +1002,22 @@ public partial class HudCustomizerView : UserControl
                 HttpSources = _httpSources.Select(CloneHttp).ToList()
             };
             var profile = BuildEditedProfile(_profiles[_selectedIndex]);
+            settings=settings with { Profiles=settings.Profiles.Select(p=>p.Id==profile.Id ? profile : p).ToList() };
             var required = HudProfileRenderer.GetRequiredVariables(profile);
             var vars = await _previewVariables.SnapshotAsync(settings, required, profile.GpuAdapterId, profile.PingTarget, profile.ProbeProtocol, profile.ProbePort);
+            ProfileDataWarnings.Check(profile,vars,"preview");
             var data = HudProfileRenderer.Render(profile, vars);
             ProfileStatusText.Text = "";
 
             Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<HudRenderData>> refresh = async ct =>
             {
                 var latest = await _previewVariables.SnapshotAsync(settings, required, profile.GpuAdapterId, profile.PingTarget, profile.ProbeProtocol, profile.ProbePort, ct);
+                ProfileDataWarnings.Check(profile,latest,"preview");
                 return HudProfileRenderer.Render(profile, latest);
             };
 
-            await _hud.ShowCustomAsync(data, refresh);
+            if(presenter is not null) await presenter(data,refresh);
+            else await _hud.ShowCustomAsync(data, refresh);
         }
         catch (Exception ex)
         {
@@ -1000,7 +1025,7 @@ public partial class HudCustomizerView : UserControl
         }
         finally
         {
-            PreviewBtn.IsEnabled = true;
+            PreviewBtn.IsEnabled = _hud is { IsClosed:false };
         }
     }
 

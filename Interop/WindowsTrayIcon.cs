@@ -35,6 +35,7 @@ internal sealed class WindowsTrayIcon : IDisposable
     private readonly Action _clicked;
     private readonly Action _doubleClicked;
     private readonly WndProc _wndProc;
+    private GCHandle _callbackRoot;
     private readonly string _className;
     private readonly IntPtr _instance;
     private IntPtr _hwnd;
@@ -55,10 +56,21 @@ internal sealed class WindowsTrayIcon : IDisposable
         _className = $"EndfieldChargePlus.Tray.{Guid.NewGuid():N}";
         _instance = GetModuleHandleW(null);
 
-        RegisterWindowClass();
-        CreateMessageWindow();
-        LoadTrayIcon();
-        AddIcon(tooltip);
+        // Native window classes store a function pointer, not a managed delegate reference.
+        _callbackRoot=GCHandle.Alloc(_wndProc);
+        try
+        {
+            RegisterWindowClass();
+            CreateMessageWindow();
+            LoadTrayIcon();
+            AddIcon(tooltip);
+        }
+        catch
+        {
+            // Also tear down partially constructed windows when Explorer rejects the tray icon.
+            Dispose();
+            throw;
+        }
     }
 
     private void RegisterWindowClass()
@@ -151,7 +163,7 @@ internal sealed class WindowsTrayIcon : IDisposable
 
     private IntPtr WindowProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
-        if (msg == TrayCallbackMessage)
+        if (!_disposed && msg == TrayCallbackMessage)
         {
             uint mouseMessage = unchecked((uint)lParam.ToInt64()) & 0xFFFFu;
             if (mouseMessage == WmLButtonDblClk)
@@ -207,9 +219,8 @@ internal sealed class WindowsTrayIcon : IDisposable
 
         if (_hwnd != IntPtr.Zero)
         {
-            try { DestroyWindow(_hwnd); }
+            try { if (DestroyWindow(_hwnd)) _hwnd=IntPtr.Zero; }
             catch { }
-            _hwnd = IntPtr.Zero;
         }
 
         if (_ownsIcon && _hIcon != IntPtr.Zero)
@@ -221,11 +232,13 @@ internal sealed class WindowsTrayIcon : IDisposable
 
         if (_classAtom != 0)
         {
-            try { UnregisterClassW(_className, _instance); }
+            try { if (UnregisterClassW(_className, _instance)) _classAtom=0; }
             catch { }
-            _classAtom = 0;
         }
 
+        // If native cleanup fails, retain the callback until process exit rather than leaving a dangling pointer.
+        if (_hwnd==IntPtr.Zero && _classAtom==0 && _callbackRoot.IsAllocated) _callbackRoot.Free();
+        GC.KeepAlive(_wndProc);
         GC.SuppressFinalize(this);
     }
 

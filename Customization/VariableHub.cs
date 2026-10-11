@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -21,10 +21,9 @@ namespace EndfieldChargePlus.Customization;
 public sealed class VariableHub : IDisposable
 {
     private readonly SemaphoreSlim _snapshotGate = new(1, 1);
+    private int _disposed;
     public double SamplingIntervalSeconds { get; set; } = 1;
-    private string _lastSampleKey = "";
-    private DateTime _lastSampleAt;
-    private Dictionary<string, object?>? _lastSample;
+    private readonly Dictionary<string,(long At,Dictionary<string,object?> Values)> _samples=new();
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(8) };
     private static readonly DeepSeekCalendarUpdater CalendarUpdater = new(Path.Combine(EndfieldChargePlus.Interop.AppPaths.DataDirectory, "holiday-calendar"));
     private readonly Dictionary<string, HttpCacheEntry> _httpCache = new(StringComparer.OrdinalIgnoreCase);
@@ -113,9 +112,11 @@ public sealed class VariableHub : IDisposable
         int probePort = 443,
         CancellationToken ct = default)
     {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed)!=0,this);
         await _snapshotGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed)!=0,this);
         if (_lastLanguage != LocalizationManager.Current)
         {
             _lastLanguage = LocalizationManager.Current;
@@ -128,13 +129,15 @@ public sealed class VariableHub : IDisposable
             : new HashSet<string>(requestedVariables.Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.OrdinalIgnoreCase);
 
         var vars = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var sampleProfile=settings.Profiles.FirstOrDefault(p=>p.Id==settings.ActiveProfileId);
+        object? profileKey=requested is null || requested.Any(k=>k.StartsWith("app.") || k.StartsWith("frame.")) ? sampleProfile : null;
         string sampleKey = string.Join(",", requested?.OrderBy(k => k, StringComparer.OrdinalIgnoreCase) ?? new[] { "*" }.AsEnumerable())
             + "|" + gpuAdapterId + "|" + pingTarget + "|" + probeProtocol + "|" + probePort
-            + "|" + JsonSerializer.Serialize(settings) + "|" + LocalizationManager.Current;
-        double interval = double.IsFinite(SamplingIntervalSeconds) ? Math.Clamp(SamplingIntervalSeconds, 0.5, 60) : 1;
-        if (_lastSample is not null && sampleKey == _lastSampleKey && (DateTime.UtcNow - _lastSampleAt).TotalSeconds < interval)
+            + "|" + JsonSerializer.Serialize(new { settings.DeepSeekApiKeyProtected,settings.DeepSeekPeakWindows,settings.HttpSources,Profile=profileKey }) + "|" + LocalizationManager.Current;
+        double interval = double.IsFinite(SamplingIntervalSeconds) ? Math.Clamp(SamplingIntervalSeconds, 0.1, 60) : 1;
+        if (_samples.TryGetValue(sampleKey,out var sample) && Environment.TickCount64-sample.At < interval*1000 && !sample.Values.Any(p=>p.Key.StartsWith("frame.") && p.Key.EndsWith(".fps") && p.Value is null))
         {
-            var cached = new Dictionary<string, object?>(_lastSample, StringComparer.OrdinalIgnoreCase);
+            var cached = new Dictionary<string, object?>(sample.Values, StringComparer.OrdinalIgnoreCase);
             AddClockAndSystem(cached, NeedsPrefix(requested, "system."), NeedsPrefix(requested, "time."));
             if (NeedsPrefix(requested, "deepseek.period.")) AddDeepSeekPeriod(cached, settings);
             return cached;
@@ -200,9 +203,20 @@ public sealed class VariableHub : IDisposable
         if (NeedsPrefix(requested, "custom."))
             await AddCustomHttpAsync(vars, settings, ct, requested).ConfigureAwait(false);
 
-        _lastSample = new Dictionary<string, object?>(vars, StringComparer.OrdinalIgnoreCase);
-        _lastSampleAt = DateTime.UtcNow;
-        _lastSampleKey = sampleKey;
+        var frameProfile=settings.Profiles.FirstOrDefault(p=>p.Id==settings.ActiveProfileId);
+        if (frameProfile is not null)
+        {
+            var frameKeys=requested ?? HudProfileRenderer.GetRequiredVariables(frameProfile).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (frameKeys.Any(k=>k.StartsWith("frame.",StringComparison.OrdinalIgnoreCase)))
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    foreach (var kind in new[] { "display", "window" })
+                        if (frameKeys.Any(k=>k.StartsWith($"frame.{kind}.",StringComparison.OrdinalIgnoreCase)))
+                            FrameRateMetrics.Add(vars,kind,FrameRateBackend.Read(kind,kind=="display" ? frameProfile.FrameDisplayId : frameProfile.FrameWindowId),frameProfile.FrameFullScaleFps);
+                });
+        }
+        if (_samples.Count>64) _samples.Clear();
+        _samples[sampleKey]=(Environment.TickCount64,new Dictionary<string,object?>(vars,StringComparer.OrdinalIgnoreCase));
         return vars;
         }
         finally { _snapshotGate.Release(); }
@@ -1784,5 +1798,15 @@ public sealed class VariableHub : IDisposable
 
     private sealed record HttpCacheEntry(string Json, DateTime ExpiresAt, string Error = "");
 
-    public void Dispose() { _advanced.Dispose(); }
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed,1)!=0) return;
+        _=DisposeAfterSamplingAsync();
+    }
+    private async Task DisposeAfterSamplingAsync()
+    {
+        await _snapshotGate.WaitAsync().ConfigureAwait(false);
+        try { _advanced.Dispose(); _samples.Clear(); }
+        finally { _snapshotGate.Release(); }
+    }
 }

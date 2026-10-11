@@ -45,5 +45,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Assets/china-holidays.json" LogicalName="EndfieldChargePlus.china-holidays.json" />
+    <EmbeddedResource Include="Assets/PresentMon/ECPFrames-x64.exe" LogicalName="EndfieldChargePlus.PresentMon" />
+    <EmbeddedResource Include="Assets/PresentMon/LICENSE.txt" LogicalName="EndfieldChargePlus.PresentMon.License" />
   </ItemGroup>
 </Project>

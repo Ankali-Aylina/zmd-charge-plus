@@ -41,3 +41,8 @@ settings.*.json
 
 # Isolated official-period regression output
 **/obj-period/
+
+# Avalonia task and isolated regression/native build caches
+**/.avalonia-build-tasks/
+**/obj-bugs/
+native/ECPFrames/build/
