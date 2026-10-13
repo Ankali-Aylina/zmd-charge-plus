@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('win-x64','win-x86')][string]$Runtime = 'win-x64',
+    [ValidateSet('win-x64','win-x86','win-arm64')][string]$Runtime = 'win-x64',
     [string]$Output = (Join-Path $PSScriptRoot "../publish/$Runtime-portable")
 )
 $ErrorActionPreference = 'Stop'

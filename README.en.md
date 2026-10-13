@@ -1,8 +1,10 @@
 # Endfield Charge Plus · Endfield-style Status HUD+
 
-Current source version: **v0.1.1** (not published in Releases). Version changes require an explicit user request; see [version policy](docs/VERSIONING.md).
+See this repository’s [Releases](https://github.com/GlacierGlimmer/zmd-charge-plus/releases) for current downloads and per-version changes. This README covers installation and general usage.
 
-[简体中文](README.md) · **English**　｜　**Windows 10 / 11 · Linux x64 · macOS 13+ · v0.1.1**
+Multiple HUDs, custom fonts and sampling intervals, persistent-click profile cycling, real FPS, World clock and grouped built-ins; see Settings and the [change log](docs/release-notes.md).
+
+[简体中文](README.md) · **English**　｜　**Windows 10 / 11 · Linux x64 · macOS 13+**
 
 > **More than a battery notification: bring the information you care about to the top of your screen.**
 
@@ -51,6 +53,7 @@ For a version that needs no installation, get the Portable ZIP for your device f
 | :-- | :-- |
 | `EndfieldChargePlus-v0.1.1-win-x64-portable.zip` | Common Intel / AMD 64-bit Windows PCs (recommended) |
 | `EndfieldChargePlus-v0.1.1-win-x86-portable.zip` | For 32-bit Windows devices |
+| `EndfieldChargePlus-v0.1.1-win-arm64-portable.zip` | Windows ARM64 devices, including Snapdragon Windows PCs |
 
 **Getting started:**
 
@@ -114,19 +117,28 @@ DeepSeek requires your API key; custom HTTP/JSON requests target endpoints you c
 
 ## 💻 Windows requirements & build
 
-- **OS:** Windows 10 / 11, x64 and x86.
-- **Portable packages:** each ZIP contains a self-contained application folder; no separately installed .NET runtime. Extract the entire folder and run `EndfieldChargePlus.exe`. Keep the accompanying libraries to avoid native dependency extraction during launch.
+- **OS:** Windows 10 / 11, x64, x86 and ARM64.
+- **Portable packages:** each ZIP contains only a self-contained `EndfieldChargePlus.exe`; no separately installed .NET runtime. Embedded native dependencies are extracted automatically on first launch.
 - **Building:** Windows and the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
 
 ```powershell
 # Build from source
 dotnet build EndfieldChargePlus.csproj -c Release
 
-# Example: publish a self-contained x64 application folder
+# Example: publish a self-contained x64 executable
 ./scripts/package-windows.ps1 -Runtime win-x64
 ```
 
-Replace `win-x64` with `win-x86` to publish the x86 build.
+Replace `win-x64` with `win-x86` or `win-arm64` for the other architectures. Every build produces one EXE. Frame capture selects the embedded x64 or ARM64 collector according to the Windows OS architecture.
+
+
+Microsoft Store submission bundles contain **x64 and x86 (32-bit)** only. ARM64 is distributed as a separate single-file EXE / portable ZIP. Publish the x64/x86 executables first, then run:
+
+```powershell
+./scripts/package-store.ps1
+```
+
+The script uses Windows SDK MakeAppx to validate and export MSIXBUNDLE / MSIXUPLOAD, with a fresh staging directory for each build so older ARM64 packages cannot enter the bundle. The Store package version is separate from the displayed product version; version changes still require an explicit user request.
 
 ## 📄 Origin & license
 

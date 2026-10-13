@@ -1,57 +1,149 @@
 using System.Runtime.InteropServices;
 using Avalonia;
-using EndfieldChargePlus.Diagnostics;
+using Avalonia.Threading;
 
 namespace EndfieldChargePlus.Interop;
 
-internal sealed class WindowsHudLayer
+internal sealed class WindowsHudLayer : IDisposable
 {
     private readonly IntPtr _handle;
-    private IntPtr _desktop;
+    private readonly Func<IntPtr> _desktopHost;
+    private bool? _desktopMode;
+    private bool? _topmost;
+    private IntPtr _lastDesktopHost;
     private const int Style = -16;
     private const uint Child = 0x40000000;
     private const uint Popup = 0x80000000;
+    private bool _disposed;
+    private static readonly HashSet<WindowsHudLayer> DesktopLayers=new();
+    private static DispatcherTimer? _desktopWatch;
 
-    internal WindowsHudLayer(IntPtr handle) => _handle = handle;
-
-    internal void Apply(bool desktop, bool topmost)
+    internal WindowsHudLayer(IntPtr handle,Func<IntPtr>? desktopHost=null)
     {
-        if (!OperatingSystem.IsWindows()) return;
-        var parent = desktop ? GetShellWindow() : IntPtr.Zero;
-        if (desktop && parent == IntPtr.Zero) return;
-        if (_desktop != parent || GetParent(_handle) != parent)
+        _handle=handle;
+        _desktopHost=desktopHost ?? FindDesktopHost;
+    }
+
+    internal void Apply(bool desktop,bool topmost)
+        => Apply(desktop,topmost,refreshDesktop:false);
+
+    private void Apply(bool desktop,bool topmost,bool refreshDesktop)
+    {
+        if(!OperatingSystem.IsWindows() || _disposed) return;
+        uint style=unchecked((uint)GetWindowLong(_handle,Style));
+        bool wasChild=(style&Child)!=0;
+        // Keep Avalonia's composited/legacy surface a top-level HWND. Reparenting
+        // it into Explorer breaks software rendering and introduces cross-process
+        // DPI changes. Desktop mode is a stable position in the normal Z band.
+        if(wasChild)
         {
-            uint before = unchecked((uint)GetWindowLong(_handle, Style));
-            if (desktop) SetWindowLong(_handle, Style, unchecked((int)((before | Child) & ~Popup)));
-            Marshal.SetLastPInvokeError(0);
-            SetParent(_handle, parent);
-            if (Marshal.GetLastPInvokeError() != 0)
-            {
-                SetWindowLong(_handle, Style, unchecked((int)before));
-                AppLog.Warn($"Unable to attach HUD to the Windows desktop: {Marshal.GetLastPInvokeError()}.");
-                return;
-            }
-            if (!desktop) SetWindowLong(_handle, Style, unchecked((int)((before | Popup) & ~Child)));
-            _desktop = parent;
+            SetParent(_handle,IntPtr.Zero);
+            SetWindowLong(_handle,Style,unchecked((int)((style|Popup)&~Child)));
         }
-        SetWindowPos(_handle, desktop ? IntPtr.Zero : new IntPtr(topmost ? -1 : -2), 0, 0, 0, 0,
-            0x0001 | 0x0002 | 0x0010 | 0x0020);
+        // Avalonia assigns its shared hidden owner to ShowInTaskbar=false
+        // windows. Demoting one owned HWND also demotes that owner and its
+        // other owned HUDs. Give each tool HUD independent native ownership;
+        // its capsule input remains owned only by this visual HUD.
+        if(GetWindow(_handle,4)!=IntPtr.Zero) SetOwner(_handle,IntPtr.Zero);
+        bool effectiveTopmost=!desktop && topmost;
+        bool actualTopmost=(GetWindowLong(_handle,-20)&8)!=0;
+        var host=desktop ? _desktopHost() : IntPtr.Zero;
+        if(!refreshDesktop && !wasChild && _desktopMode==desktop && _topmost==effectiveTopmost
+            && actualTopmost==effectiveTopmost && _lastDesktopHost==host) return;
+
+        const uint stable=0x0001|0x0002|0x0010|0x0200; // preserve size, position, focus and owner order
+        uint flags=stable|(wasChild ? 0x0020u : 0u);
+        // A desktop-order repair preserves the native band. Demoting an
+        // already normal HUD first would briefly raise it over application windows.
+        if(!refreshDesktop || wasChild || actualTopmost!=effectiveTopmost)
+            SetWindowPos(_handle,new IntPtr(effectiveTopmost ? -1 : -2),0,0,0,0,flags);
+        if(desktop)
+        {
+            // Insert immediately above the visible shell desktop and below
+            // ordinary applications. HWND_BOTTOM can put a HUD behind wallpaper.
+            var previous=host!=IntPtr.Zero ? GetWindow(host,3) : IntPtr.Zero; // GW_HWNDPREV
+            if(previous!=_handle)
+            {
+                // With no normal window above the desktop, HWND_TOP retains the
+                // already non-topmost band without promoting it to a topmost HWND.
+                if(previous!=IntPtr.Zero && (GetWindowLong(previous,-20)&8)!=0) previous=IntPtr.Zero;
+                SetWindowPos(_handle,host==IntPtr.Zero ? new IntPtr(1) : previous,0,0,0,0,stable);
+            }
+        }
+        _desktopMode=desktop;_topmost=effectiveTopmost;_lastDesktopHost=host;
+        if(desktop)
+        {
+            DesktopLayers.Add(this);
+            if(_desktopWatch is null)
+            {
+                _desktopWatch=new DispatcherTimer { Interval=TimeSpan.FromMilliseconds(250) };
+                _desktopWatch.Tick+=(_,_)=>
+                {
+                    foreach(var layer in DesktopLayers.ToArray()) layer.RepairDesktopOrder();
+                };
+            }
+            _desktopWatch.Start();
+        }
+        else UnregisterDesktop();
     }
 
-    internal PixelPoint ToWindowPosition(PixelPoint screen)
+    private void RepairDesktopOrder()
     {
-        if (_desktop == IntPtr.Zero) return screen;
-        var point = new NativePoint { X = screen.X, Y = screen.Y };
-        MapWindowPoints(IntPtr.Zero, _desktop, ref point, 1);
-        return new PixelPoint(point.X, point.Y);
+        if(_disposed || !_desktopMode.GetValueOrDefault()) return;
+        var host=_desktopHost();
+        bool covered=false;
+        // Explorer reorders its wallpaper after the foreground notification.
+        // Read native Z order from one shared watchdog; only write when the
+        // desktop actually overtook this HUD (or Explorer replaced its host).
+        int hops=0;
+        for(var next=host==IntPtr.Zero ? IntPtr.Zero : GetWindow(host,2);next!=IntPtr.Zero && hops++<512;next=GetWindow(next,2))
+        {
+            if(next==_handle) { covered=true;break; }
+        }
+        if(covered || host!=_lastDesktopHost) Apply(true,false,refreshDesktop:true);
     }
 
-    [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
+    private void UnregisterDesktop()
+    {
+        DesktopLayers.Remove(this);
+        if(DesktopLayers.Count==0) _desktopWatch?.Stop();
+    }
+
+    public void Dispose()
+    {
+        _disposed=true;
+        UnregisterDesktop();
+    }
+
+    internal PixelPoint ToWindowPosition(PixelPoint screen) => screen;
+
+    private static void SetOwner(IntPtr handle,IntPtr owner)
+    {
+        if(IntPtr.Size==8) SetWindowLongPtr(handle,-8,owner);
+        else SetWindowLong(handle,-8,owner.ToInt32());
+    }
+
+    private static IntPtr FindDesktopHost()
+    {
+        var host=GetShellWindow();
+        // Some Explorer versions place the icon view in WorkerW, some Progman.
+        // EnumWindows returns Z order, so choose the highest genuine desktop host.
+        EnumWindows((window,_)=>
+        {
+            if(!IsWindowVisible(window) || FindWindowEx(window,IntPtr.Zero,"SHELLDLL_DefView",null)==IntPtr.Zero) return true;
+            host=window;return false;
+        },IntPtr.Zero);
+        return host;
+    }
+    private delegate bool EnumWindowProc(IntPtr window,IntPtr data);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowProc callback,IntPtr data);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr window);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern IntPtr FindWindowEx(IntPtr parent,IntPtr after,string cls,string? title);
     [DllImport("user32.dll")] private static extern IntPtr GetShellWindow();
-    [DllImport("user32.dll")] private static extern IntPtr GetParent(IntPtr window);
-    [DllImport("user32.dll", SetLastError = true)] private static extern IntPtr SetParent(IntPtr window, IntPtr parent);
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] private static extern int GetWindowLong(IntPtr window, int index);
-    [DllImport("user32.dll", EntryPoint = "SetWindowLongW")] private static extern int SetWindowLong(IntPtr window, int index, int value);
-    [DllImport("user32.dll")] private static extern int MapWindowPoints(IntPtr from, IntPtr to, ref NativePoint point, uint count);
-    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr window, IntPtr after, int x, int y, int width, int height, uint flags);
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr window,uint command);
+    [DllImport("user32.dll")] private static extern IntPtr SetParent(IntPtr window,IntPtr parent);
+    [DllImport("user32.dll",EntryPoint="GetWindowLongW")] private static extern int GetWindowLong(IntPtr window,int index);
+    [DllImport("user32.dll",EntryPoint="SetWindowLongW")] private static extern int SetWindowLong(IntPtr window,int index,int value);
+    [DllImport("user32.dll",EntryPoint="SetWindowLongPtrW")] private static extern IntPtr SetWindowLongPtr(IntPtr window,int index,IntPtr value);
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr window,IntPtr after,int x,int y,int width,int height,uint flags);
 }

@@ -23,16 +23,24 @@ internal class BugRegressionTests
     {
         try
         {
-            AppBuilder.Configure<FontTestApp>().UsePlatformDetect().WithInterFont().SetupWithoutStarting();
+            var builder=AppBuilder.Configure<FontTestApp>().UsePlatformDetect().WithInterFont();
+            if(Environment.GetEnvironmentVariable("ECP_RENDER_FALLBACK")=="1")
+                builder.With(new Win32PlatformOptions { CompositionMode=new[] { Win32CompositionMode.RedirectionSurface },RenderingMode=new[] { Win32RenderingMode.Software } });
+            builder.SetupWithoutStarting();
+            if(args.Length>0 && args[0]=="--desktop-shell") { DesktopShellChecks.Run(Check); Console.WriteLine($"PASS {_checks} actual Explorer desktop checks"); return 0; }
+            if(args.Length>0 && args[0]=="--rendering") { NativeRenderingChecks.Run(Check); Console.WriteLine($"PASS {_checks} native rendering checks"); return 0; }
             if(args.Length>0 && args[0]=="--interaction") { InteractionRegressionChecks.Standalone(Check); Console.WriteLine($"PASS {_checks} interaction checks"); return 0; }
+            if(args.Length>0 && args[0]=="--layers") { RunLayerChecks(); Console.WriteLine($"PASS {_checks} multi-HUD layer checks"); return 0; }
             if(args.Length>0 && args[0].StartsWith("--frame")) return LiveFrameChecks.Run(args);
             if(args.Length>0 && args[0]=="--fps-live") return LiveFrameChecks.Run(args);
             var face = new Typeface(new FontFamily("avares://Avalonia.Fonts.Inter/Assets#Inter"));
             Check(face.GlyphTypeface.GetGlyph('A') != 0, "ECP-4: bundled Inter must resolve without an installed font.");
             NativeWindowChecks();
             FeatureRegressionChecks.Run(Check);
+            FrameCollectorResourceChecks.Run(Check);
             SettingsFeatureChecks();
             RuntimeRegressionChecks.Run(Check);
+            NativeRenderingChecks.Run(Check);
             SynchronizationContext.SetSynchronizationContext(null);
             RunAsync().GetAwaiter().GetResult();
             Console.WriteLine($"PASS: {_checks} checks (embedded font, native HUD styles/layers, HTTP, colors, fans, sampling).");
@@ -43,6 +51,7 @@ internal class BugRegressionTests
 
     private static void SettingsFeatureChecks()
     {
+        WorldClockChecks.Editor(Check);
         EndfieldChargePlus.LocalizationManager.Initialize("zh-CN");
         var hud=new HudWindow();
         var settings=new EndfieldChargePlus.Settings.AppSettings();
@@ -65,6 +74,15 @@ internal class BugRegressionTests
         window.Close(); hud.Close();
     }
 
+    private static void RunLayerChecks()
+    {
+        using var finish=new CancellationTokenSource(TimeSpan.FromSeconds(180));Exception? failure=null;bool completed=false;
+        Avalonia.Threading.Dispatcher.UIThread.Post(async ()=> { try { await MultiHudLayerChecks.Run(Check);completed=true; } catch(Exception ex) { failure=ex; } finally { finish.Cancel(); } });
+        Avalonia.Threading.Dispatcher.UIThread.MainLoop(finish.Token);
+        if(failure is not null) throw failure;
+        if(!completed) throw new TimeoutException("Multi-HUD layer tests did not complete.");
+    }
+
     private static void NativeWindowChecks()
     {
         IntPtr window = CreateWindowEx(0x40000, "STATIC", "ECP regression", 0x80000000, 0, 0, 560, 90, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
@@ -75,9 +93,9 @@ internal class BugRegressionTests
             Check(input is not null, "Native HUD attachment.");
             uint style = unchecked((uint)GetWindowLong(window, -20));
             Check((style & 0x080800A0) == 0x080800A0 && (style & 0x40000) == 0, "ECP-18/46: tool window, no activation, click-through, no Alt+Tab app style.");
-            var layer = new WindowsHudLayer(window);
+            using var layer = new WindowsHudLayer(window);
             layer.Apply(true, false);
-            Check(GetParent(window) == GetShellWindow(), $"ECP-45: desktop HUD belongs to Explorer's desktop. Parent={GetParent(window)}, shell={GetShellWindow()}, error={Marshal.GetLastPInvokeError()}.");
+            Check((GetWindowLong(window,-16)&0x40000000)==0 && (GetWindowLong(window,-20)&8)==0,"Desktop HUD remains a non-topmost top-level render surface, avoiding Explorer child rendering/DPI failures.");
             layer.Apply(false, true);
             Check(GetParent(window) == IntPtr.Zero, "HUD returns to top-level mode.");
             Check((GetWindowLong(window, -20) & 8) != 0, "ECP-72: native topmost style applied.");

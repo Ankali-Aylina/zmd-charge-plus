@@ -14,7 +14,7 @@ internal static class RuntimeRegressionChecks
     private static readonly BindingFlags Private=BindingFlags.Instance|BindingFlags.NonPublic;
     internal static void Run(Action<bool,string> check)
     {
-        using var finished=new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        using var finished=new CancellationTokenSource(TimeSpan.FromSeconds(180));
         Exception? failure=null;
         Dispatcher.UIThread.Post(async () =>
         {

@@ -1,8 +1,10 @@
 # Endfield Charge Plus · 终末地风格状态栏HUD+
 
-当前源码版本：**v0.1.1**（尚未发布 Releases）。版本只在用户明确要求时修改，见[版本约定](docs/VERSIONING.md)。
+下载与每版更新说明请查看本仓库 [Releases](https://github.com/GlacierGlimmer/zmd-charge-plus/releases)。README 保留通用安装和使用说明。
 
-**简体中文** · [English](README.en.md)　｜　**Windows 10 / 11 · Linux x64 · macOS 13+ · v0.1.1**
+多实例 HUD、自定义字体与采样间隔、常驻点击轮播、实际 FPS、世界时钟及按类别排列的内置方案；详见软件设置与 [更新说明](docs/release-notes.md)。
+
+**简体中文** · [English](README.en.md)　｜　**Windows 10 / 11 · Linux x64 · macOS 13+**
 
 > **不止于电量提示，让需要的信息以你喜欢的方式出现在屏幕上。**
 
@@ -46,11 +48,6 @@ winget install --id 9P3PLD3LX7W6 --source msstore --exact
 ### Windows：GitHub 便携版
 
 需要免安装版本时，前往 [**GitHub Releases**](https://github.com/GlacierGlimmer/zmd-charge-plus/releases) 下载适合你设备的便携版 ZIP。解压后直接运行其中的 `EndfieldChargePlus.exe`，无需安装，也无需另装 .NET 运行时。
-
-| 下载文件 | 适用设备 |
-| :-- | :-- |
-| `EndfieldChargePlus-v0.1.1-win-x64-portable.zip` | 常见 Intel / AMD 64 位 Windows 电脑（推荐） |
-| `EndfieldChargePlus-v0.1.1-win-x86-portable.zip` | 适用于 32 位 Windows 设备 |
 
 **首次使用只需几步：**
 
@@ -114,19 +111,28 @@ DeepSeek API 需要用户自行提供 Key；HTTP/JSON 接口由用户自行配�
 
 ## 💻 Windows 运行要求与源码构建
 
-- **系统：** Windows 10 / 11，支持 x64 和 x86。
-- **Portable 包：** ZIP 内为自包含应用目录，不需要另行安装 .NET。完整解压后运行 `EndfieldChargePlus.exe`；保留同目录的运行库可避免单文件包在启动时解压原生依赖。
+- **系统：** Windows 10 / 11，支持 x64、x86 和 ARM64。
+- **Portable 包：** ZIP 内只有自包含的 `EndfieldChargePlus.exe`，不需要另行安装 .NET。首次启动时自动解压内置原生依赖。
 - **自行编译：** Windows 环境及 [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)。
 
 ```powershell
 # 编译源码
 dotnet build EndfieldChargePlus.csproj -c Release
 
-# 示例：发布 x64 自包含目录
+# 示例：发布 x64 自包含单文件
 ./scripts/package-windows.ps1 -Runtime win-x64
 ```
 
-构建 x86 时将 `win-x64` 换为 `win-x86`。
+构建 x86 或 ARM64 时将 `win-x64` 换为 `win-x86` 或 `win-arm64`。所有架构均输出单个 EXE；帧率采集器根据 Windows 系统架构选择内置 x64 或 ARM64 版本。
+
+
+微软商店提交包固定包含 **x64 与 x86（32 位）**，不包含 ARM64。ARM64 作为独立单文件 EXE / portable ZIP 提供。先发布 x64/x86 单文件，再运行：
+
+```powershell
+./scripts/package-store.ps1
+```
+
+该脚本使用 Windows SDK MakeAppx 校验并导出 MSIXBUNDLE / MSIXUPLOAD；每次使用全新暂存目录，避免旧 ARM64 包混入。商店包版本参数独立于产品显示版本，版本修改仍需用户明确要求。
 
 ## 📄 来源与许可
 

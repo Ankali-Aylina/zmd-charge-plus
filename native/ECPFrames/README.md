@@ -12,6 +12,10 @@ Build with Visual Studio C++ tools, a current Windows SDK, and Python 3:
 
     build.cmd path-to-python.exe
 
-The x64 helper uses a static CRT. Copy build/ECPFrames-x64.exe to Assets/PresentMon/ECPFrames-x64.exe and update FrameRateBackend.Hash after rebuilding. Both x64 and x86 ECP can launch it on 64-bit Windows. 32-bit Windows reports unsupported capture. Packaged ECP remains one EXE; the helper is embedded and extracted with SHA256 verification.
+Build the ARM64 helper with the MSVC ARM64 cross tools and libraries installed:
+
+    build.cmd path-to-python.exe arm64
+
+Both helpers use a static CRT. Copy build/ECPFrames-<architecture>.exe to Assets/PresentMon/ and update the corresponding SHA256 in FrameRateBackend.CollectorFor after rebuilding. ECP selects the helper by OS architecture: x64 Windows launches the x64 reader, and ARM64 Windows launches the ARM64 reader, including when the app itself is emulated. 32-bit Windows reports unsupported capture. Packaged ECP remains one EXE; both helpers are embedded and extracted with SHA256 verification.
 
 Tests: official ETL replay, administrator live D3D11 two-window attribution, and automatic trace cleanup when the parent exits.

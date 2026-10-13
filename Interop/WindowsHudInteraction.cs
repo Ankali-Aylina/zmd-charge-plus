@@ -65,9 +65,9 @@ internal sealed class WindowsHudInteraction : IDisposable
         }
         var origin=new PixelPoint(bounds.X,bounds.Y);
         if(child) ScreenToClient(parent,ref origin);
-        if(!child) SetWindowPos(_input,topmost ? new(-1) : new(-2),0,0,0,0,0x13);
+        if(!child) SetWindowPos(_input,topmost ? new(-1) : new(-2),0,0,0,0,0x13|0x200);
         // Immediately below the visual owner. The host itself remains transparent at every stage.
-        SetWindowPos(_input,child ? IntPtr.Zero : _owner,origin.X,origin.Y,bounds.Width,bounds.Height,0x10|0x40);
+        SetWindowPos(_input,child ? IntPtr.Zero : _owner,origin.X,origin.Y,bounds.Width,bounds.Height,0x10|0x40|0x200);
         _lastBounds=bounds;_lastTopmost=topmost;
     }
     private static long Style(IntPtr hwnd,int index) => IntPtr.Size==8 ? GetWindowLongPtr(hwnd,index).ToInt64() : GetWindowLong(hwnd,index);

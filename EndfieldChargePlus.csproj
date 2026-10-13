@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <RuntimeIdentifiers>win-x64;win-x86</RuntimeIdentifiers>
+    <RuntimeIdentifiers>win-x64;win-x86;win-arm64</RuntimeIdentifiers>
     <RootNamespace>EndfieldChargePlus</RootNamespace>
     <AssemblyName>EndfieldChargePlus</AssemblyName>
     <Product>Endfield Charge Plus</Product>
@@ -46,6 +46,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Assets/china-holidays.json" LogicalName="EndfieldChargePlus.china-holidays.json" />
     <EmbeddedResource Include="Assets/PresentMon/ECPFrames-x64.exe" LogicalName="EndfieldChargePlus.PresentMon" />
+    <EmbeddedResource Include="Assets/PresentMon/ECPFrames-arm64.exe" LogicalName="EndfieldChargePlus.PresentMon.Arm64" />
     <EmbeddedResource Include="Assets/PresentMon/LICENSE.txt" LogicalName="EndfieldChargePlus.PresentMon.License" />
   </ItemGroup>
 </Project>

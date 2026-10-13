@@ -70,6 +70,10 @@ internal sealed class WindowsHudHitTest : IDisposable
         {
             uint before = GetExtendedStyle();
             uint wanted = (before | MouseThroughStyles) & ~WsExAppWindow;
+            // A frame refresh rebuilds native rendering state. Sampling an
+            // unchanged HUD must never repeatedly invalidate that surface.
+            if (wanted == before)
+                return;
             if (wanted != before)
                 SetExtendedStyle(wanted);
 

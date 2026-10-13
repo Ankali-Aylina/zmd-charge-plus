@@ -22,7 +22,12 @@ public static class FrameRateBackend
     private static string _status="等待采样 / Waiting for frames";
     private static string _readerError="";
     private static long _framesReceived;
-    private const string Hash="2A0F046B1F384BF3F2CB9E19C9A629A3B75EB9153553148C4C23830A8C690259";
+    // Use OS architecture so emulated x64/x86 apps on Windows ARM launch
+    // the native ARM collector rather than emulating the ETW decoder too.
+    private static (string FileName,string Resource,string Sha256) CollectorFor(Architecture osArchitecture)
+        => osArchitecture==Architecture.Arm64
+            ? ("ECPFrames-arm64.exe","EndfieldChargePlus.PresentMon.Arm64","23D509EFEFDA8B4E3BD8DEC7FDACFF027BF19200EF5A1AFC44BA83503A53F176")
+            : ("ECPFrames-x64.exe","EndfieldChargePlus.PresentMon","2A0F046B1F384BF3F2CB9E19C9A629A3B75EB9153553148C4C23830A8C690259");
     private delegate bool EnumProc(IntPtr handle,IntPtr data);
     public static IReadOnlyList<FrameTarget> Windows()
     {
@@ -109,14 +114,15 @@ public static class FrameRateBackend
         {
             WindowsFrameTrace.CleanupOrphans();
             string folder=Path.Combine(AppPaths.DataDirectory,"collectors","ECPFrames-PresentMon-2.6.0"); Directory.CreateDirectory(folder);
-            string path=Path.Combine(folder,"ECPFrames-x64.exe");
+            var collector=CollectorFor(RuntimeInformation.OSArchitecture);
+            string path=Path.Combine(folder,collector.FileName);
             bool valid=false;
-            if (File.Exists(path)) using(var existing=File.OpenRead(path)) valid=Convert.ToHexString(SHA256.HashData(existing))==Hash;
+            if (File.Exists(path)) using(var existing=File.OpenRead(path)) valid=Convert.ToHexString(SHA256.HashData(existing))==collector.Sha256;
             if (!valid)
             {
-                using var source=Assembly.GetExecutingAssembly().GetManifestResourceStream("EndfieldChargePlus.PresentMon") ?? throw new IOException("PresentMon resource missing");
+                using var source=Assembly.GetExecutingAssembly().GetManifestResourceStream(collector.Resource) ?? throw new IOException("PresentMon resource missing");
                 using(var output=File.Create(path)) source.CopyTo(output);
-                using var check=File.OpenRead(path); if (Convert.ToHexString(SHA256.HashData(check))!=Hash) throw new IOException("PresentMon integrity check failed");
+                using var check=File.OpenRead(path); if (Convert.ToHexString(SHA256.HashData(check))!=collector.Sha256) throw new IOException("PresentMon integrity check failed");
             }
             string licensePath=Path.Combine(folder,"LICENSE.txt");
             if(!File.Exists(licensePath)) { using var license=Assembly.GetExecutingAssembly().GetManifestResourceStream("EndfieldChargePlus.PresentMon.License"); if(license is not null) { using var output=File.Create(licensePath); license.CopyTo(output); } }

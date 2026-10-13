@@ -6,6 +6,7 @@ internal static class FeatureRegressionChecks
 {
     internal static void Run(Action<bool,string> check)
     {
+        WorldClockChecks.Run(check);
         var csvReader=new PresentMonCsvReader();
         csvReader.TryRead("ProcessID,SwapChainAddress,VidPnSourceId,CPUStartQPCTime,DisplayLatency,DisplayedTime",out _);
         check(csvReader.TryRead("55,0x1,4294967295,1000,5,16.6",out var sample) && sample.Display is null && sample.Timestamp==1.005,"Unattributed real window frames remain usable even without a display ID.");
