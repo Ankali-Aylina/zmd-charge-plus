@@ -49,12 +49,6 @@ This installs the same app from the Microsoft Store source. Review any prompts s
 
 For a version that needs no installation, get the Portable ZIP for your device from [**GitHub Releases**](https://github.com/GlacierGlimmer/zmd-charge-plus/releases). Extract it to a folder and run `EndfieldChargePlus.exe`. No installer or separately installed .NET runtime is required.
 
-| Download | Device |
-| :-- | :-- |
-| `EndfieldChargePlus-v0.1.1-win-x64-portable.zip` | Common Intel / AMD 64-bit Windows PCs (recommended) |
-| `EndfieldChargePlus-v0.1.1-win-x86-portable.zip` | For 32-bit Windows devices |
-| `EndfieldChargePlus-v0.1.1-win-arm64-portable.zip` | Windows ARM64 devices, including Snapdragon Windows PCs |
-
 **Getting started:**
 
 1. Install and launch ECP through Microsoft Store or winget. For the GitHub portable version, extract the ZIP to a permanent folder and run `EndfieldChargePlus.exe`. ECP stays available in the system tray.
