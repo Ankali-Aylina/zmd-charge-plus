@@ -31,6 +31,8 @@ internal class BugRegressionTests
             if(args.Length>0 && args[0]=="--rendering") { NativeRenderingChecks.Run(Check); Console.WriteLine($"PASS {_checks} native rendering checks"); return 0; }
             if(args.Length>0 && args[0]=="--interaction") { InteractionRegressionChecks.Standalone(Check); Console.WriteLine($"PASS {_checks} interaction checks"); return 0; }
             if(args.Length>0 && args[0]=="--roll") { CycleRollChecks.Standalone(Check); Console.WriteLine($"PASS {_checks} cycle roll checks"); return 0; }
+            if(args.Length>0 && args[0]=="--save-diag") { SaveDiagnostics.Standalone(); return 0; }
+            if(args.Length>0 && args[0]=="--http") { SynchronizationContext.SetSynchronizationContext(null); RunAsync().GetAwaiter().GetResult(); Console.WriteLine("PASS http checks"); return 0; }
             if(args.Length>0 && args[0]=="--layers") { RunLayerChecks(); Console.WriteLine($"PASS {_checks} multi-HUD layer checks"); return 0; }
             if(args.Length>0 && args[0].StartsWith("--frame")) return LiveFrameChecks.Run(args);
             if(args.Length>0 && args[0]=="--fps-live") return LiveFrameChecks.Run(args);
@@ -40,7 +42,11 @@ internal class BugRegressionTests
             FeatureRegressionChecks.Run(Check);
             FrameCollectorResourceChecks.Run(Check);
             SettingsFeatureChecks();
+            SettingsSaveChecks.Run(Check);
             RuntimeRegressionChecks.Run(Check);
+            // 交互检查本身就要跑近三分钟，必须有自己的时间预算：
+            // 塞进上面的 180 秒里会让整体稳定地超时。
+            InteractionRegressionChecks.Standalone(Check);
             CycleRollChecks.Standalone(Check);
             NativeRenderingChecks.Run(Check);
             SynchronizationContext.SetSynchronizationContext(null);

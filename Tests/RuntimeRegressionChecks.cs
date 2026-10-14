@@ -15,15 +15,18 @@ internal static class RuntimeRegressionChecks
     internal static void Run(Action<bool,string> check)
     {
         using var finished=new CancellationTokenSource(TimeSpan.FromSeconds(180));
-        Exception? failure=null;
+        Exception? failure=null;bool completed=false;
         Dispatcher.UIThread.Post(async () =>
         {
-            try { await CheckAsync(check); await InteractionRegressionChecks.Run(check); }
+            try { await CheckAsync(check); completed=true; }
             catch (Exception ex) { failure=ex; }
-            finally { finished.Cancel(); }
+            // 超时后 MainLoop 已经返回并释放了令牌；这里的收尾必须容错，
+            // 否则会把“超时”伪装成一个看不懂的 ObjectDisposedException。
+            finally { try { finished.Cancel(); } catch (ObjectDisposedException) { } }
         });
         Dispatcher.UIThread.MainLoop(finished.Token);
         if (failure is not null) throw failure;
+        if (!completed) throw new TimeoutException("Runtime regression checks did not finish within 180s.");
     }
     private static async Task CheckAsync(Action<bool,string> check)
     {

@@ -7,7 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="BugRegressionTests.cs" /><Compile Include="NativeRenderingChecks.cs" /><Compile Include="FrameCollectorResourceChecks.cs" /><Compile Include="MultiHudLayerChecks.cs" /><Compile Include="DesktopShellChecks.cs" />
-    <Compile Include="WorldClockChecks.cs" /><Compile Include="FeatureRegressionChecks.cs" /><Compile Include="InteractionRegressionChecks.cs" /><Compile Include="PositionRegressionChecks.cs" /><Compile Include="RuntimeRegressionChecks.cs" /><Compile Include="LiveFrameChecks.cs" /><Compile Include="NativeFrameSource.cs" /><Compile Include="CycleRollChecks.cs" />
+    <Compile Include="WorldClockChecks.cs" /><Compile Include="FeatureRegressionChecks.cs" /><Compile Include="InteractionRegressionChecks.cs" /><Compile Include="PositionRegressionChecks.cs" /><Compile Include="RuntimeRegressionChecks.cs" /><Compile Include="LiveFrameChecks.cs" /><Compile Include="NativeFrameSource.cs" /><Compile Include="CycleRollChecks.cs" /><Compile Include="SaveDiagnostics.cs" /><Compile Include="SettingsSaveChecks.cs" />
     <None Include="Fixtures/presentmon2.6-replay.csv" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="../EndfieldChargePlus.csproj" />
   </ItemGroup>

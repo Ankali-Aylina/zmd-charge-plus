@@ -15,7 +15,30 @@ public static class SettingsManager
         PropertyNameCaseInsensitive = true,
     };
 
-    public static string SettingsDirectory { get; } = AppPaths.DataDirectory;
+    private static string? _storageDirectoryOverride;
+
+    /// <summary>
+    /// 配置读写目录。默认是用户真实的配置目录；测试可以用
+    /// <see cref="UseStorageDirectory"/> 把它重定向到隔离目录。
+    /// </summary>
+    public static string SettingsDirectory => _storageDirectoryOverride ?? AppPaths.DataDirectory;
+
+    /// <summary>
+    /// 把配置读写重定向到隔离目录（仅测试使用），释放返回值后恢复。
+    /// 故障注入检查因此可以在临时目录里进行，绝不去动用户真实的配置目录 ——
+    /// 否则测试自己的创建/删除会在用户目录里留下 delete-pending 残留，反而弄坏保存。
+    /// </summary>
+    internal static IDisposable UseStorageDirectory(string directory)
+    {
+        string? previous=_storageDirectoryOverride;
+        _storageDirectoryOverride=directory;
+        return new StorageScope(previous);
+    }
+
+    private sealed class StorageScope(string? previous) : IDisposable
+    {
+        public void Dispose() => _storageDirectoryOverride=previous;
+    }
 
     public static string SettingsPath => Path.Combine(SettingsDirectory, "settings.json");
     public static string BackupsDirectory => Path.Combine(SettingsDirectory, "Backups");
@@ -76,22 +99,32 @@ public static class SettingsManager
     public static void Save(AppSettings settings)
     {
         settings = Normalize(settings);
+        // 只有配置目录本身是必需的：写不进去必须如实报错。
         Directory.CreateDirectory(SettingsDirectory);
-        Directory.CreateDirectory(BackupsDirectory);
 
         string json = JsonSerializer.Serialize(settings, JsonOptions);
         string temp = SettingsPath + ".tmp";
 
         try
         {
-            if (File.Exists(SettingsPath))
+            // 滚动备份只是辅助手段。Backups 目录可能被杀毒/索引器占用，或在上一次
+            // 中断后停留在无法访问的状态；那绝不能阻止用户保存配置本身。
+            RefreshPreviousBackup();
+
+            // 优先写临时文件再原子替换，避免崩溃时留下半截配置。但如果连临时文件都
+            // 建不出来（目录被安全软件短时占用，或残留的 delete-pending 项），就退回
+            // 直接写入：用户不该因为一个暂存文件而完全无法保存。
+            try
             {
-                string previous = Path.Combine(BackupsDirectory, "settings.previous.json");
-                File.Copy(SettingsPath, previous, overwrite: true);
+                File.WriteAllText(temp, json);
+                File.Move(temp, SettingsPath, overwrite: true);
+            }
+            catch (Exception staging) when (staging is IOException or UnauthorizedAccessException)
+            {
+                AppLog.Warn($"Could not stage a temporary settings file; writing in place. {staging.Message}");
+                File.WriteAllText(SettingsPath, json);
             }
 
-            File.WriteAllText(temp, json);
-            File.Move(temp, SettingsPath, overwrite: true);
             AppLog.Info("Settings saved successfully.");
         }
         catch (Exception ex)
@@ -99,6 +132,25 @@ public static class SettingsManager
             try { if (File.Exists(temp)) File.Delete(temp); } catch { }
             AppLog.Error("Failed to save settings.", ex);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// 刷新 Backups\settings.previous.json。属于尽力而为：失败只记录警告，
+    /// 因为保存配置本身并不依赖它。用户在“配置与维护”里主动备份时仍然会如实报错。
+    /// </summary>
+    private static void RefreshPreviousBackup()
+    {
+        try
+        {
+            if (!File.Exists(SettingsPath)) return;
+            Directory.CreateDirectory(BackupsDirectory);
+            string previous = Path.Combine(BackupsDirectory, "settings.previous.json");
+            File.Copy(SettingsPath, previous, overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn($"Could not refresh the settings backup; saving continued. {ex.Message}");
         }
     }
 

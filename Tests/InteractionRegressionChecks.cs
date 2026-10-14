@@ -15,10 +15,11 @@ internal static class InteractionRegressionChecks
     private static T Field<T>(object o,string name)=>(T)o.GetType().GetField(name,Private)!.GetValue(o)!;
     internal static void Standalone(Action<bool,string> check)
     {
-        using var finish=new CancellationTokenSource(TimeSpan.FromSeconds(180));Exception? failure=null;
-        Avalonia.Threading.Dispatcher.UIThread.Post(async ()=> { try { await Run(check); } catch(Exception ex) { failure=ex; } finally { finish.Cancel(); } });
+        using var finish=new CancellationTokenSource(TimeSpan.FromSeconds(180));Exception? failure=null;bool completed=false;
+        Avalonia.Threading.Dispatcher.UIThread.Post(async ()=> { try { await Run(check); completed=true; } catch(Exception ex) { failure=ex; } finally { try { finish.Cancel(); } catch(ObjectDisposedException) { } } });
         Avalonia.Threading.Dispatcher.UIThread.MainLoop(finish.Token);
         if(failure is not null) throw failure;
+        if(!completed) throw new TimeoutException("Interaction checks did not finish within 180s.");
     }
     internal static async Task Run(Action<bool,string> check)
     {
