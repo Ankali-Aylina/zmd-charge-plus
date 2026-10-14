@@ -30,6 +30,7 @@ internal class BugRegressionTests
             if(args.Length>0 && args[0]=="--desktop-shell") { DesktopShellChecks.Run(Check); Console.WriteLine($"PASS {_checks} actual Explorer desktop checks"); return 0; }
             if(args.Length>0 && args[0]=="--rendering") { NativeRenderingChecks.Run(Check); Console.WriteLine($"PASS {_checks} native rendering checks"); return 0; }
             if(args.Length>0 && args[0]=="--interaction") { InteractionRegressionChecks.Standalone(Check); Console.WriteLine($"PASS {_checks} interaction checks"); return 0; }
+            if(args.Length>0 && args[0]=="--roll") { CycleRollChecks.Standalone(Check); Console.WriteLine($"PASS {_checks} cycle roll checks"); return 0; }
             if(args.Length>0 && args[0]=="--layers") { RunLayerChecks(); Console.WriteLine($"PASS {_checks} multi-HUD layer checks"); return 0; }
             if(args.Length>0 && args[0].StartsWith("--frame")) return LiveFrameChecks.Run(args);
             if(args.Length>0 && args[0]=="--fps-live") return LiveFrameChecks.Run(args);
@@ -40,6 +41,7 @@ internal class BugRegressionTests
             FrameCollectorResourceChecks.Run(Check);
             SettingsFeatureChecks();
             RuntimeRegressionChecks.Run(Check);
+            CycleRollChecks.Standalone(Check);
             NativeRenderingChecks.Run(Check);
             SynchronizationContext.SetSynchronizationContext(null);
             RunAsync().GetAwaiter().GetResult();

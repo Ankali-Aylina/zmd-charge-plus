@@ -209,9 +209,10 @@
                           <TextBlock Text="轮播动画" FontSize="12" Foreground="#E6E6E8" VerticalAlignment="Center"/>
                           <ComboBox x:Name="CycleAnimationModeCombo" Grid.Column="1" Height="36" Margin="14,0,0,0" VerticalAlignment="Center"/>
                         </Grid>
-                        <TextBlock Text="开启自动轮播后，以这里的动画为准，忽略各方案自身的动画模式。" FontSize="11" Foreground="#85858B" TextWrapping="Wrap"/>
+                        <TextBlock Text="开启自动轮播后，以这里的动画为准；简洁与完整会覆盖各方案自身的动画模式，向上翻滚则在原窗口内滚动内容。" FontSize="11" Foreground="#85858B" TextWrapping="Wrap"/>
                         <TextBlock Text="简洁：收回上一项后，快速唤出下一项。" FontSize="12" Foreground="#C6CA4C" TextWrapping="Wrap"/>
                         <TextBlock Text="完整：收回上一项后，以完整标题、波纹与形态动画唤出下一项。" FontSize="12" Foreground="#C6CA4C" TextWrapping="Wrap"/>
+                        <TextBlock Text="向上翻滚：窗口与胶囊保持不动，旧内容向上滚出、新内容从下方滚入，不再重播唤出动画。" FontSize="12" Foreground="#C6CA4C" TextWrapping="Wrap"/>
                       </StackPanel>
 
                       <Border Height="1" Background="#303034"/>

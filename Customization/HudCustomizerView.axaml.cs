@@ -200,6 +200,7 @@ public partial class HudCustomizerView : UserControl
         CycleAnimationModeCombo.Items.Clear();
         CycleAnimationModeCombo.Items.Add(LocalizationManager.Text("简洁", "Simple"));
         CycleAnimationModeCombo.Items.Add(LocalizationManager.Text("完整", "Full"));
+        CycleAnimationModeCombo.Items.Add(LocalizationManager.Text("向上翻滚", "Roll Up"));
 
         NetworkDisplayUnitCombo.Items.Clear();
         NetworkDisplayUnitCombo.Items.Add("Mbps");
@@ -314,7 +315,7 @@ public partial class HudCustomizerView : UserControl
         _loaded = HudSettingsNormalizer.Normalize(settings ?? CustomHudSettings.CreateDefault());
         AutoCycleSwitch.IsChecked = _loaded.AutoCycle;
         CycleSecondsBox.Value = _loaded.CycleSeconds;
-        CycleAnimationModeCombo.SelectedIndex = string.Equals(_loaded.CycleAnimationMode, "Simple", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
+        CycleAnimationModeCombo.SelectedIndex = CycleAnimationModeIndex(_loaded.CycleAnimationMode);
         DeepSeekKeyBox.Text = SecretStore.Unprotect(_loaded.DeepSeekApiKeyProtected);
         DeepSeekWindowsBox.Text = DeepSeekPeriodCalendar.OfficialWindows;
 
@@ -356,7 +357,7 @@ public partial class HudCustomizerView : UserControl
             AutoCycle = AutoCycleSwitch.IsChecked == true,
             CycleSeconds = (int)Math.Clamp(CycleSecondsBox.Value ?? 10, 3, 3600),
             CycleProfileIds = GetSanitizedCycleProfileIds(),
-            CycleAnimationMode = CycleAnimationModeCombo.SelectedIndex == 0 ? "Simple" : "Full",
+            CycleAnimationMode = SelectedCycleAnimationMode(),
             ActiveProfileId = _selectedIndex >= 0 && _selectedIndex < _profiles.Count
                 ? _profiles[_selectedIndex].Id
                 : (_profiles.FirstOrDefault(p => string.Equals(p.Id, _loaded.ActiveProfileId, StringComparison.OrdinalIgnoreCase))?.Id
@@ -833,6 +834,23 @@ public partial class HudCustomizerView : UserControl
         ProbePortBox.Opacity = usesPort ? 1.0 : 0.45;
     }
 
+    // 轮播动画下拉框的固定顺序：简洁 / 完整 / 向上翻滚。
+    private static int CycleAnimationModeIndex(string? mode) => mode?.Trim() switch
+    {
+        var m when string.Equals(m, CustomHudSettings.CycleAnimationSimple, StringComparison.OrdinalIgnoreCase) => 0,
+        var m when string.Equals(m, CustomHudSettings.CycleAnimationFull, StringComparison.OrdinalIgnoreCase) => 1,
+        _ => 2,
+    };
+
+    // 下拉框尚未建立选中项时（例如加载过程中）沿用当前已加载的配置，避免意外改档。
+    private string SelectedCycleAnimationMode() => CycleAnimationModeCombo.SelectedIndex switch
+    {
+        0 => CustomHudSettings.CycleAnimationSimple,
+        1 => CustomHudSettings.CycleAnimationFull,
+        2 => CustomHudSettings.CycleAnimationRoll,
+        _ => CustomHudSettings.NormalizeCycleAnimationMode(_loaded.CycleAnimationMode),
+    };
+
     private List<string> GetSanitizedCycleProfileIds()
     {
         var validIds = _profiles.Select(p => p.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -1019,7 +1037,7 @@ public partial class HudCustomizerView : UserControl
                 AutoCycle = AutoCycleSwitch.IsChecked == true,
                 CycleSeconds = (int)Math.Clamp(CycleSecondsBox.Value ?? 10, 3, 3600),
                 CycleProfileIds = GetSanitizedCycleProfileIds(),
-                CycleAnimationMode = CycleAnimationModeCombo.SelectedIndex == 0 ? "Simple" : "Full",
+                CycleAnimationMode = SelectedCycleAnimationMode(),
                 ActiveProfileId = _profiles[_selectedIndex].Id,
                 DeepSeekApiKeyProtected = SecretStore.Protect(DeepSeekKeyBox.Text),
                 DeepSeekPeakWindows = DeepSeekPeriodCalendar.OfficialWindows,

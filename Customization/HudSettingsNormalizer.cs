@@ -84,9 +84,7 @@ public static class HudSettingsNormalizer
                 .ToList();
         }
 
-        string cycleAnimationMode = string.Equals(source.CycleAnimationMode, "Simple", StringComparison.OrdinalIgnoreCase)
-            ? "Simple"
-            : "Full";
+        string cycleAnimationMode = CustomHudSettings.NormalizeCycleAnimationMode(source.CycleAnimationMode);
 
         return source with
         {

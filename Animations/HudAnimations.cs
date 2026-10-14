@@ -262,6 +262,48 @@ internal static class HudAnimations
         return a;
     }
 
+    // 轮播“向上翻滚”使用的垂直位移量。取值等于最终胶囊高度（60），
+    // 因此结束时间点的位移恰好让内容完全离开 / 完全进入裁切窗口。
+    public const double RollTravel = 60d;
+
+    /// <summary>旧内容向上滚出裁切窗口所用的时间。</summary>
+    public static readonly TimeSpan RollOutDuration = TimeSpan.FromMilliseconds(360);
+
+    /// <summary>新内容从下方滚入最终位置所用的时间。</summary>
+    public static readonly TimeSpan RollInDuration = TimeSpan.FromMilliseconds(460);
+
+    /// <summary>
+    /// 轮播切换的第一阶段：把胶囊内的图标、数值与徽章整体向上滚出裁切窗口。
+    /// 与完整唤出动画不同，这里只做垂直位移，窗口本身保持可见、位置与输入区域不变。
+    /// </summary>
+    public static Animation RollOut()
+    {
+        var a = new Animation
+        {
+            Duration = RollOutDuration,
+            FillMode = FillMode.Forward,
+        };
+        a.Children.Add(KF(0d, null, TY(0d)));
+        a.Children.Add(KF(1d, KS_In, TY(-RollTravel)));
+        return a;
+    }
+
+    /// <summary>
+    /// 轮播切换的第二阶段：内容已替换为新方案，从裁切窗口下方滚回最终位置。
+    /// 调用方负责在开始前把位移重置为 +RollTravel。
+    /// </summary>
+    public static Animation RollIn()
+    {
+        var a = new Animation
+        {
+            Duration = RollInDuration,
+            FillMode = FillMode.Forward,
+        };
+        a.Children.Add(KF(0d, null, TY(RollTravel)));
+        a.Children.Add(KF(1d, KS_Out, TY(0d)));
+        return a;
+    }
+
     private static Animation New(AnimationOptions o) => new()
     {
         Duration = TimeSpan.FromSeconds(Math.Clamp(o.DurationSeconds, 3d, 10d)),

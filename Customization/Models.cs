@@ -93,9 +93,35 @@ public sealed record CustomHudSettings
     // Ordered profile IDs used by automatic cycling. Null means a legacy settings file
     // that predates the explicit cycle queue; the normalizer migrates that case once.
     public List<string>? CycleProfileIds { get; init; } = null;
-    // Simple | Full. When AutoCycle is enabled this overrides each profile's own
-    // AnimationMode for transitions between queue entries.
-    public string CycleAnimationMode { get; init; } = "Simple";
+    // Simple | Full | Roll. When AutoCycle is enabled this overrides each profile's own
+    // AnimationMode for transitions between queue entries. "Roll" scrolls the capsule
+    // content up inside the existing window instead of retracting and re-summoning it,
+    // so the window is never hidden while cycling.
+    public string CycleAnimationMode { get; init; } = CycleAnimationRoll;
+
+    /// <summary>收回上一项后快速唤出下一项。</summary>
+    public const string CycleAnimationSimple = "Simple";
+
+    /// <summary>收回上一项后以完整标题、波纹与形态动画唤出下一项。</summary>
+    public const string CycleAnimationFull = "Full";
+
+    /// <summary>窗口与胶囊保持不动，内容在原窗口内向上翻滚切换。</summary>
+    public const string CycleAnimationRoll = "Roll";
+
+    /// <summary>
+    /// 把任意取值归一化为三种受支持的轮播动画。新配置（旧设置文件中没有该字段）
+    /// 以及无法识别的取值都使用“向上翻滚”；显式保存过 Simple / Full 的配置保持不变。
+    /// </summary>
+    public static string NormalizeCycleAnimationMode(string? mode) => mode?.Trim() switch
+    {
+        var m when string.Equals(m, CycleAnimationSimple, StringComparison.OrdinalIgnoreCase) => CycleAnimationSimple,
+        var m when string.Equals(m, CycleAnimationFull, StringComparison.OrdinalIgnoreCase) => CycleAnimationFull,
+        _ => CycleAnimationRoll,
+    };
+
+    public static bool IsRollCycleAnimation(string? mode) =>
+        string.Equals(mode?.Trim(), CycleAnimationRoll, StringComparison.OrdinalIgnoreCase);
+
     public string ActiveProfileId { get; init; } = "";
 
     public string DeepSeekApiKeyProtected { get; init; } = "";
@@ -119,7 +145,7 @@ public sealed record CustomHudSettings
                 .Where(p => !p.BuiltInKey.EndsWith("-fps",StringComparison.OrdinalIgnoreCase))
                 .Select(p => p.Id)
                 .ToList(),
-            CycleAnimationMode = "Simple"
+            CycleAnimationMode = CycleAnimationRoll
         };
     }
 

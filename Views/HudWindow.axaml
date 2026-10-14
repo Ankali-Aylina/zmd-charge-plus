@@ -87,35 +87,124 @@
           </Grid>
         </Border>
 
-        <Grid x:Name="BoltIcon"
-              Width="32" Height="32"
-              HorizontalAlignment="Center" VerticalAlignment="Center"
-              Opacity="0">
-          <Grid.RenderTransform>
-            <TransformGroup>
-              <ScaleTransform ScaleX="0.4" ScaleY="0.4"/>
-              <TranslateTransform X="0"/>
-            </TransformGroup>
-          </Grid.RenderTransform>
+        <!-- 轮播“向上翻滚”的裁切窗口：尺寸与最终胶囊一致（560x60）。
+             内容层（ContentHost）整体做垂直位移，超出这个范围的部分被裁掉，
+             于是向上移动一个胶囊高度就形成“旧内容滚出、新内容滚入”。
+             窗口本身始终保持可见，不参与这段动画。 -->
+        <Grid x:Name="ContentClip"
+              Width="560" Height="60"
+              ClipToBounds="True"
+              HorizontalAlignment="Center" VerticalAlignment="Center">
+          <Grid x:Name="ContentHost"
+                Width="560" Height="60"
+                HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Grid.RenderTransform><TranslateTransform Y="0"/></Grid.RenderTransform>
 
-          <Grid x:Name="CircleForm">
-            <Ellipse Width="32" Height="32" Fill="#FFE9E7E4"/>
-            <PathIcon x:Name="CircleGlyph" Width="18" Height="18"
-                      Data="{DynamicResource Geo.Bolt}"
-                      Foreground="#FF141313"/>
-          </Grid>
+            <Grid x:Name="BoltIcon"
+                  Width="32" Height="32"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                  Opacity="0">
+              <Grid.RenderTransform>
+                <TransformGroup>
+                  <ScaleTransform ScaleX="0.4" ScaleY="0.4"/>
+                  <TranslateTransform X="0"/>
+                </TransformGroup>
+              </Grid.RenderTransform>
 
-          <Grid x:Name="SquareForm" Opacity="0">
-            <Border Width="18" Height="18" CornerRadius="4.5"
-                    Background="#FFE9E7E4"
-                    HorizontalAlignment="Center" VerticalAlignment="Center">
-              <PathIcon x:Name="SquareGlyph" Width="12" Height="12"
-                        Data="{DynamicResource Geo.Bolt}"
-                        Foreground="#FF141313"/>
-            </Border>
+              <Grid x:Name="CircleForm">
+                <Ellipse Width="32" Height="32" Fill="#FFE9E7E4"/>
+                <PathIcon x:Name="CircleGlyph" Width="18" Height="18"
+                          Data="{DynamicResource Geo.Bolt}"
+                          Foreground="#FF141313"/>
+              </Grid>
+
+              <Grid x:Name="SquareForm" Opacity="0">
+                <Border Width="18" Height="18" CornerRadius="4.5"
+                        Background="#FFE9E7E4"
+                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                  <PathIcon x:Name="SquareGlyph" Width="12" Height="12"
+                            Data="{DynamicResource Geo.Bolt}"
+                            Foreground="#FF141313"/>
+                </Border>
+              </Grid>
+            </Grid>
+
+            <Grid x:Name="NumHost"
+                  Width="560"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                  Opacity="0">
+              <Grid.RenderTransform><TranslateTransform X="0"/></Grid.RenderTransform>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="32"/>
+                <ColumnDefinition Width="18"/>
+                <ColumnDefinition Width="14"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="14"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="5"/>
+              </Grid.ColumnDefinitions>
+
+              <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Spacing="2">
+                <TextBlock x:Name="PrimaryText"
+                           Text="0"
+                           FontFamily="{DynamicResource Hud.FontFamilyNumeric}"
+                           FontSize="26" FontWeight="Medium" Foreground="White"/>
+                <TextBlock x:Name="SecondaryText"
+                           Text="/0"
+                           FontFamily="{DynamicResource Hud.FontFamilyNumeric}"
+                           FontSize="14" FontWeight="Medium"
+                           Foreground="White" Opacity="0.55" VerticalAlignment="Center"/>
+              </StackPanel>
+
+              <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Spacing="1">
+                <TextBlock x:Name="RightText"
+                           Text="0"
+                           FontFamily="{DynamicResource Hud.FontFamilyNumeric}"
+                           FontSize="22" FontWeight="Medium" Foreground="White"/>
+                <TextBlock x:Name="RightSuffixText"
+                           Text="%"
+                           FontFamily="{DynamicResource Hud.FontFamilyNumeric}"
+                           FontSize="13" FontWeight="Medium"
+                           Foreground="White" Opacity="0.55" VerticalAlignment="Center"/>
+              </StackPanel>
+
+              <Grid x:Name="Badge" Grid.Column="7" Width="46" Height="46" VerticalAlignment="Center">
+                <Ellipse Width="46" Height="46" Fill="#FF262425"/>
+                <Path x:Name="BadgeArc"
+                      Width="46" Height="46"
+                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                      Stretch="None"
+                      Stroke="#FFC6CA4C" StrokeThickness="4.5" StrokeLineCap="Round"/>
+
+                <Grid x:Name="BadgeLaptop" Width="24" Height="17"
+                      VerticalAlignment="Center" HorizontalAlignment="Center">
+                  <Border x:Name="LaptopScreen"
+                          Width="17" Height="11.5" CornerRadius="1.5"
+                          BorderBrush="#FFC6CA4C" BorderThickness="2"
+                          VerticalAlignment="Top" HorizontalAlignment="Center"/>
+                  <Border x:Name="LaptopBase"
+                          Width="24" Height="3" CornerRadius="1.5"
+                          Background="#FFC6CA4C"
+                          VerticalAlignment="Bottom" HorizontalAlignment="Center"/>
+                </Grid>
+                <Border x:Name="BadgeElectrode" Width="9" Height="3" CornerRadius="1,1,0,0"
+                        Background="#FFC6CA4C"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Margin="0,-14,0,0"/>
+
+                <PathIcon x:Name="BadgeGlyph"
+                          Width="21" Height="21"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                          Foreground="#FFC6CA4C"
+                          IsVisible="False"/>
+              </Grid>
+            </Grid>
           </Grid>
         </Grid>
 
+        <!-- 标题层只在完整唤出动画期间出现，常驻稳态下不可见，因此不参与轮播翻滚。 -->
         <StackPanel x:Name="TitleHost"
                     Orientation="Vertical" Spacing="2"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -132,79 +221,6 @@
                      FontSize="26" FontWeight="Bold" LetterSpacing="2"
                      HorizontalAlignment="Center" Foreground="White"/>
         </StackPanel>
-
-        <Grid x:Name="NumHost"
-              Width="560"
-              HorizontalAlignment="Center" VerticalAlignment="Center"
-              Opacity="0">
-          <Grid.RenderTransform><TranslateTransform X="0"/></Grid.RenderTransform>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="32"/>
-            <ColumnDefinition Width="18"/>
-            <ColumnDefinition Width="14"/>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="14"/>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="5"/>
-          </Grid.ColumnDefinitions>
-
-          <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Spacing="2">
-            <TextBlock x:Name="PrimaryText"
-                       Text="0"
-                       FontFamily="{DynamicResource Hud.FontFamilyNumeric}"
-                       FontSize="26" FontWeight="Medium" Foreground="White"/>
-            <TextBlock x:Name="SecondaryText"
-                       Text="/0"
-                       FontFamily="{DynamicResource Hud.FontFamilyNumeric}"
-                       FontSize="14" FontWeight="Medium"
-                       Foreground="White" Opacity="0.55" VerticalAlignment="Center"/>
-          </StackPanel>
-
-          <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Spacing="1">
-            <TextBlock x:Name="RightText"
-                       Text="0"
-                       FontFamily="{DynamicResource Hud.FontFamilyNumeric}"
-                       FontSize="22" FontWeight="Medium" Foreground="White"/>
-            <TextBlock x:Name="RightSuffixText"
-                       Text="%"
-                       FontFamily="{DynamicResource Hud.FontFamilyNumeric}"
-                       FontSize="13" FontWeight="Medium"
-                       Foreground="White" Opacity="0.55" VerticalAlignment="Center"/>
-          </StackPanel>
-
-          <Grid x:Name="Badge" Grid.Column="7" Width="46" Height="46" VerticalAlignment="Center">
-            <Ellipse Width="46" Height="46" Fill="#FF262425"/>
-            <Path x:Name="BadgeArc"
-                  Width="46" Height="46"
-                  HorizontalAlignment="Center" VerticalAlignment="Center"
-                  Stretch="None"
-                  Stroke="#FFC6CA4C" StrokeThickness="4.5" StrokeLineCap="Round"/>
-
-            <Grid x:Name="BadgeLaptop" Width="24" Height="17"
-                  VerticalAlignment="Center" HorizontalAlignment="Center">
-              <Border x:Name="LaptopScreen"
-                      Width="17" Height="11.5" CornerRadius="1.5"
-                      BorderBrush="#FFC6CA4C" BorderThickness="2"
-                      VerticalAlignment="Top" HorizontalAlignment="Center"/>
-              <Border x:Name="LaptopBase"
-                      Width="24" Height="3" CornerRadius="1.5"
-                      Background="#FFC6CA4C"
-                      VerticalAlignment="Bottom" HorizontalAlignment="Center"/>
-            </Grid>
-            <Border x:Name="BadgeElectrode" Width="9" Height="3" CornerRadius="1,1,0,0"
-                    Background="#FFC6CA4C"
-                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                    Margin="0,-14,0,0"/>
-
-            <PathIcon x:Name="BadgeGlyph"
-                      Width="21" Height="21"
-                      HorizontalAlignment="Center" VerticalAlignment="Center"
-                      Foreground="#FFC6CA4C"
-                      IsVisible="False"/>
-          </Grid>
-        </Grid>
       </Grid>
     </Grid>
   </Grid>

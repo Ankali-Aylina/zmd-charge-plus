@@ -590,9 +590,19 @@ public sealed partial class CustomHudRuntime : IDisposable
 
             if (profileChanged || deepSeekPeriodChanged)
             {
-                await _hud.HideAnimatedAsync();
-                _activeToken.ThrowIfCancellationRequested();
-                await _hud.ShowPersistentAsync(data, refresh);
+                // 自动轮播与点击轮播在“向上翻滚”下完全不隐藏窗口：内容在胶囊内滚动切换，
+                // 位置、显示层级与输入区域保持不动，因此不会出现关闭再重开的闪断。
+                // 峰谷切换是独立事件，仍保留它要求的完整唤出动画。
+                if (profileChanged && !deepSeekPeriodChanged && UsesRollCycleAnimation)
+                {
+                    await _hud.RollToPersistentAsync(data, refresh);
+                }
+                else
+                {
+                    await _hud.HideAnimatedAsync();
+                    _activeToken.ThrowIfCancellationRequested();
+                    await _hud.ShowPersistentAsync(data, refresh);
+                }
                 _persistentShown = true;
             }
             else if (!_persistentShown || !_hud.IsVisible)
@@ -640,11 +650,20 @@ public sealed partial class CustomHudRuntime : IDisposable
         return result;
     }
 
+    /// <summary>当前轮播配置是否使用“在原窗口内向上翻滚”。</summary>
+    private bool UsesRollCycleAnimation =>
+        CustomHudSettings.IsRollCycleAnimation(_settings.CycleAnimationMode);
+
     private HudProfile ApplyCycleAnimationMode(HudProfile profile)
     {
-        string mode = string.Equals(_settings.CycleAnimationMode, "Simple", StringComparison.OrdinalIgnoreCase)
-            ? "Simple"
-            : "Full";
+        // “向上翻滚”在原窗口内滚动内容、不重播唤出动画，因此保留方案自身的动画模式；
+        // 简洁 / 完整两档继续覆盖方案设置，行为与旧版本一致。
+        if (UsesRollCycleAnimation)
+            return profile;
+
+        string mode = string.Equals(_settings.CycleAnimationMode, CustomHudSettings.CycleAnimationSimple, StringComparison.OrdinalIgnoreCase)
+            ? CustomHudSettings.CycleAnimationSimple
+            : CustomHudSettings.CycleAnimationFull;
         return profile with { AnimationMode = mode };
     }
 

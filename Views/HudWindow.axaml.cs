@@ -40,6 +40,8 @@ public partial class HudWindow : Window
     {
         _cts?.Cancel();
         IsHudBusy = false;
+        // 被取代的翻滚不再自行收尾，位移交给下一次呈现重新对齐。
+        IsContentRolling = false;
     }
 
     // The progress ring is deliberately animated independently from the existing HUD
@@ -78,6 +80,11 @@ public partial class HudWindow : Window
     }
 
     public bool IsHudBusy { get; private set; }
+
+    /// <summary>
+    /// 轮播“向上翻滚”进行中：窗口保持可见，只有胶囊内的内容层在做垂直位移。
+    /// </summary>
+    public bool IsContentRolling { get; private set; }
 
     public HudWindow()
     {
@@ -350,6 +357,87 @@ public partial class HudWindow : Window
         }
     }
 
+    /// <summary>
+    /// 轮播“向上翻滚”：窗口、胶囊、显示层级与输入区域全部保持不动，只把胶囊内的
+    /// 图标、数值与徽章整体向上滚出裁切窗口，替换数据后再从下方滚回原位。
+    /// 与 <see cref="ShowPersistentAsync"/> 不同，这里从不 Hide/Show 窗口，
+    /// 因此轮播切换不会出现窗口消失再重开的闪断。
+    /// </summary>
+    public async Task RollToPersistentAsync(
+        HudRenderData data,
+        Func<CancellationToken, Task<HudRenderData>>? liveRefresh = null)
+    {
+        if (_closed) return;
+
+        // 只有已经稳定常驻显示的 HUD 才能在原窗口内滚动内容。
+        // 首次唤出、非常驻或窗口尚未显示时，退回完整唤出流程，行为与旧版本一致。
+        if (!IsVisible || !_persistent)
+        {
+            await ShowPersistentAsync(data, liveRefresh);
+            return;
+        }
+
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        var localCts = _cts;
+        var ct = localCts.Token;
+        using var refreshCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        ApplyWindowLayer(true);
+        IsHudBusy = true;
+        IsContentRolling = true;
+
+        Task? refreshTask = null;
+        try
+        {
+            // 被取消的唤出或翻滚可能停在中间帧；先对齐到确定的常驻稳态，
+            // 保证每一次翻滚的起点与终点都完全一致。
+            SetPersistentFinalState();
+
+            await HudAnimations.RollOut().RunAsync(ContentHost, ct);
+
+            // 内容此刻已完全离开裁切窗口，替换数据不会被看到。
+            ApplyRenderData(data);
+            ContentHost.RenderTransform = new TranslateTransform(0d, HudAnimations.RollTravel);
+
+            // 采样在数据替换之后才开始，避免旧内容还在画面里时被新数据改写。
+            if (liveRefresh is not null)
+                refreshTask = RefreshLiveDataAsync(liveRefresh, refreshCts.Token, persistent: true);
+
+            await HudAnimations.RollIn().RunAsync(ContentHost, ct);
+
+            SetPersistentFinalState();
+        }
+        catch (OperationCanceledException)
+        {
+            // 仅当自己仍是最新一次翻滚时才收尾，避免过期请求覆盖新翻滚的位移。
+            if (ReferenceEquals(_cts, localCts) && !_closed)
+                SetPersistentFinalState();
+            return;
+        }
+        finally
+        {
+            if (ReferenceEquals(_cts, localCts))
+            {
+                IsContentRolling = false;
+                IsHudBusy = false;
+            }
+
+            refreshCts.Cancel();
+            if (refreshTask is not null)
+            {
+                try { await refreshTask; }
+                catch (OperationCanceledException) { }
+            }
+        }
+    }
+
+    // 轮播翻滚只位移内容层，因此任何确定状态（初始态 / 常驻稳态）都必须把位移归零，
+    // 否则一次被打断的翻滚会把内容留在裁切窗口之外。
+    private void ResetContentRollOffset()
+        => ContentHost.RenderTransform = new TranslateTransform(0d, 0d);
+
     public void UpdatePersistent(HudRenderData data)
     {
         if (_closed || !_persistent) return;
@@ -550,6 +638,7 @@ public partial class HudWindow : Window
     {
         Root.Opacity = 1;
         ScaleHost.RenderTransform = new ScaleTransform(1d, 1d);
+        ResetContentRollOffset();
         Pill.Width = 560;
         Pill.Height = 60;
         Pill.CornerRadius = new CornerRadius(30d);
@@ -612,6 +701,7 @@ public partial class HudWindow : Window
     {
         Root.Opacity = 1;
         ScaleHost.RenderTransform = new ScaleTransform(1d, 1d);
+        ResetContentRollOffset();
 
         Pill.Width = 560;
         Pill.Height = 60;

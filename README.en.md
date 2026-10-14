@@ -86,7 +86,7 @@ Other platform versions are distributed by their respective repositories; their 
 | **Pointer hot zone** | Move to the top center of the selected monitor to show the active non-battery profile while not in persistent mode. |
 | **Display & layout** | Choose monitor, nine position presets or custom X/Y, scaling and opacity. |
 | **Profiles & animation** | Built-in battery, CPU, GPU, memory, disk, network, time and DeepSeek profiles; create, edit, save and preview profiles with full/simple animations. |
-| **Automatic cycle** | Arrange a cycle queue with add/remove/reorder controls, interval and transition animation settings. |
+| **Automatic cycle** | Arrange a cycle queue with add/remove/reorder controls, interval and transition animation settings; the Roll Up transition scrolls the content up in place, so the window itself never disappears or reopens. |
 | **Variable Library** | Built-in variables, 17 types of per-drive templates and individual detected fan sensors for hardware, system, network, process, security and developer tools. |
 | **Flexible layouts** | Variable-driven title, numbers, progress ring and icons; formatting, expressions and conditional color rules. |
 | **Network probe** | Probe IPv4/IPv6/hostnames over ICMP, TCP or UDP; display latency and loss. |
